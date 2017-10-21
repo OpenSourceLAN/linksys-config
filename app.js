@@ -14,7 +14,8 @@ var requester = request.defaults({
 	headers: {
 		"Referer": `${address}/home.htm`,
 		"User-Agent": "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:55.0) Gecko/20100101 Firefox/55.0",
-		"Accept": "*/*"
+		"Accept": "*/*",
+		"Connection": "keep-alive"
 	},
 	jar: jar
 });
@@ -73,6 +74,7 @@ console.log(`${address}/FileMgmt/httpConfigProcess.htm`);
 
 
 function basicRequest(address, callback) {
+	console.log(`Requesting ${address}`)
 	requester({
 		method: 'GET',
 		uri: address,
@@ -92,7 +94,10 @@ function getFormPageValues(address, callback) {
 			$("input").each(function() {
 				var name = $(this).attr('name');
 				var val = $(this).val();
-				results[name] = val;
+				var disabled = $(this).attr('disabled');
+				if (!disabled) { //&& name.indexOf("mibError") === -1) {
+					results[name] = val;
+				}
 			})
 			console.log(results);
 			callback(results);
@@ -104,7 +109,7 @@ function submitFormPageValues(address, formData, callback) {
 	requester({
 		method: 'POST',
 		uri: `${address}/FileMgmt/dlData.htm`,
-		formData: formData,
+		form: formData,
 		headers: {
 			Referer: `${address}/FileMgmt/dlData.htm`
 		}
@@ -121,13 +126,15 @@ function makeRequester(path, referer) {
 	return function(callback) {
 		requester({
 		method: 'GET',
-		uri: address,
+		uri: path,
 	}, function(err, res, body) {
-		console.log(res.statusCode, body);
 		callback && callback()
 	})
 	}
 }
+
+var dlDataResponse = makeRequester(`${address}/FileMgmt/dlData.html?`, `${address}/FileMgmt/dlData.htm`);
+
 function getConfigUpdateRequest(address, callback) {
 	basicRequest(`${address}/FileMgmt/httpConfigProcess.htm`, callback)
 }
@@ -163,52 +170,26 @@ function fillJar(address, sessionId) {
 
 
 function doAllShittyRequests(callback) {
-	var urls = ["http://192.168.1.251/csb114f712/device/Timestamp_MIB.xml?[rlEventsMaskTableVT]Query:rlEventsMaskPollerId=5",
-		"http://192.168.1.251/csb114f712/device/noStamp.xml",
-		"http://192.168.1.251/csb114f712/device/authenticate_user.xml",
-		"http://192.168.1.251/csb114f712/FileMgmt/maintenance_file_fileDownload_m.htm",
-		"http://192.168.1.251/csb114f712/styling/styling.css",
-		"http://192.168.1.251/csb114f712/css/ProjectStyling.css",
-		"http://192.168.1.251/csb114f712/js/pageTokens.js",
-		"http://192.168.1.251/csb114f712/js/initFunctions.js",
-		"http://192.168.1.251/csb114f712/js/globalFunctions.js",
-		"http://192.168.1.251/csb114f712/styling/styling.js",
-		"http://192.168.1.251/csb114f712/js/winInWin_m.js",
-		"http://192.168.1.251/csb114f712/js/projectLocalization.js",
-		"http://192.168.1.251/csb114f712/js/IPFormatSelectionHost.js",
-		"http://192.168.1.251/csb114f712/device/blank.html",
-		"http://192.168.1.251/csb114f712/styling/images/red3angle_left.gif",
-		"http://192.168.1.251/csb114f712/FileMgmt/httpConfigProcess.htm",
-		"http://192.168.1.251/csb114f712/styling/images/empty.gif",
-		"http://192.168.1.251/FileMgmt/HTTPmib.xml",
-		"http://192.168.1.251/csb114f712/images/radio_button.png",
-		"http://192.168.1.251/csb114f712/images/radio_button_on.png",
-		"http://192.168.1.251/csb114f712/images/dropdownarrows.gif",
-		"http://192.168.1.251/csb114f712/FileMgmt/HTTPmib.xml",
-		"http://192.168.1.251/csb114f712/styling/styling.css",
-		"http://192.168.1.251/csb114f712/css/ProjectStyling.css",
-		"http://192.168.1.251/csb114f712/styling/styling.js",
-		"http://192.168.1.251/csb114f712/js/pageTokens.js",
-		"http://192.168.1.251/csb114f712/js/projectLocalization.js",
-		"http://192.168.1.251/csb114f712/FileMgmt/dlData.htm",
-		"http://192.168.1.251/csb114f712/FileMgmt/dlData.htm?"]
 
 	var index = 0;
 	function doNextDownload() {
-		if (index >= urls.length) {
+		if (index >= allRequests.length) {
 			callback && callback();
 			return;
 		}
 
-		var ourUrl = urls[index++];
+		var ourUrl = allRequests[index++];
 		requester({
 			method: 'GET',
-			uri: ourUrl,
+			uri: ourUrl.url,
+			headers: {
+				"Referer": ourUrl.referer
+			}
 		}, function(err, res, body) {
 			if (err) {
-				console.log(`Error reading ${ourUrl} - ${err}`);
+				console.log(`Error reading ${ourUrl.url} - ${err}`);
 			} else {
-				console.log(`Got ${ourUrl} with result ${res.statusCode}`);
+				console.log(`Got ${ourUrl.url} with result ${res.statusCode}`);
 			}
 			doNextDownload();
 		})	
@@ -216,7 +197,12 @@ function doAllShittyRequests(callback) {
 	doNextDownload();
 }
 
-
+doLoginRequest(address, username, password, function(sessionId) {
+	fillJar(address, sessionId);
+	doConfigUpdateRequest(address, sessionId, config, function() {
+	});
+});
+return;
 doLoginRequest(address, username, password, function(sessionId) {
 	fillJar(address, sessionId);
 	console.log(sessionId);
@@ -230,18 +216,22 @@ doLoginRequest(address, username, password, function(sessionId) {
 		setTimeout(function() {
 			//
 			doAuthUser(address, function() {
-			//	getFormPageValues(address, function(formData) {
-				//	submitFormPageValues(address, formData, function() {
+				doAllShittyRequests(function() {
+				getFormPageValues(address, function(formData) {
+					submitFormPageValues(address, formData, function() {
 
-			//	getFormPageValues(address, function(formData) {
-
+				//getFormPageValues(address, function(formData) {
+					dlDataResponse(function() {
 				//getPortStatus(address);
-				getFileUploadPage(address, function() {
+				//getFileUploadPage(address, function() {
 //					getCopyFiles(address, function() {
 						//getConfigUpdateRequest(address, function() {
 							//setTimeout(function() {
-								doAllShittyRequests(function() {
+								jar.setCookie("sessionID=", address);
+								doLoginRequest(address, username, password, function(sessionId) {
+	fillJar(address, sessionId);
 								doConfigUpdateRequest(address, sessionId, config, function() {
+								});
 									//getCopyFiles(address, function() {
 																	//doConfigUpdateRequest(address, sessionId, config, function() {
 
@@ -255,8 +245,8 @@ doLoginRequest(address, username, password, function(sessionId) {
 								})
 																//}); });
 							//}, 1000)
-						//})
-			//		});
+						})
+					});
 			//	});
 			//		})
 				})
@@ -407,20 +397,21 @@ var allRequests = [{
   "url": "http://192.168.1.251/csb114f712/js/projectLocalization.js",
   "type": "GET",
   "referer": "http://192.168.1.251/csb114f712/FileMgmt/httpConfigProcess.htm"
-},
-{
-  "url": "http://192.168.1.251/csb114f712/FileMgmt/dlData.htm",
-  "type": "GET",
-  "referer": "http://192.168.1.251/csb114f712/FileMgmt/maintenance_file_fileDownload_m.htm"
-},
+}
+//,
+// {
+//   "url": "http://192.168.1.251/csb114f712/FileMgmt/dlData.htm",
+//   "type": "GET",
+//   "referer": "http://192.168.1.251/csb114f712/FileMgmt/maintenance_file_fileDownload_m.htm"
+// },
 // {
 //   "url": "http://192.168.1.251/csb114f712/FileMgmt/dlData.htm",
 //   "type": "POST",
 //   "referer": "http://192.168.1.251/csb114f712/FileMgmt/dlData.htm"
 // },
-{
-  "url": "http://192.168.1.251/csb114f712/FileMgmt/dlData.htm?",
-  "type": "GET",
-  "referer": "http://192.168.1.251/csb114f712/FileMgmt/dlData.htm"
-}
+// {
+//   "url": "http://192.168.1.251/csb114f712/FileMgmt/dlData.htm?",
+//   "type": "GET",
+//   "referer": "http://192.168.1.251/csb114f712/FileMgmt/dlData.htm"
+// }
 ]
