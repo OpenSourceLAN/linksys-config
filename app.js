@@ -1,20 +1,34 @@
 
 var request = require('request'),
-    fs = require('fs');
+    fs = require('fs'),
+    cheerio = require('cheerio');
 
 config = require("./config.json");
 var username = config.username,
     password = config.password,
     address  = config.address,
-    config = fs.readFileSync('running-config.txt');
+    config = fs.readFileSync(config['config-filename']);
 
 var jar = request.jar();
+var requester = request.defaults({
+	headers: {
+		"Referer": `${address}/home.htm`,
+		"User-Agent": "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:55.0) Gecko/20100101 Firefox/55.0",
+		"Accept": "*/*"
+	},
+	jar: jar
+});
 
 //http://172.16.0.116/csb114f712/FileMgmt/httpConfigProcess.htm?
 //                   /csb114f712/FileMgmt/httpConfigProcess.htm
 
 function doLoginRequest(base, user, pass, cb) {
-	request.get(`${base}/System.xml?action=login&user=${user}&password=${pass}`, function(err, res, body) {
+	requester.get(`${base}/System.xml?action=login&user=${user}&password=${pass}`, function(err, res, body) {
+		console.log(res.headers)
+		if (!res.headers.sessionid) {
+			console.log(body);
+			throw "No session ID cookie returned";
+		}
 		cb(res.headers.sessionid.replace(";path=/",""))
 	})
 }
@@ -30,37 +44,6 @@ console.log(`${address}/FileMgmt/httpConfigProcess.htm`);
 		method: 'POST',
 		uri: `${address}/FileMgmt/httpConfigProcess.htm?`,
 		jar: jar,
-		// multipart: [
-		// 	{
-		// 		"Content-Disposition": 'form-data; name="restoreUrl"',
-		// 		"body": ""
-		// 	},
-		// 	{
-		// 		"Content-Disposition": 'form-data; name="errorCollector"',
-		// 		"body": ""
-		// 	},
-		// 	{
-		// 		"Content-Disposition": 'form-data; name="rlCopyFreeHistoryIndex$scalar"',
-		// 		"body": "6"
-		// 	},
-		// 	{
-		// 		"Content-Disposition": 'form-data; name="rlCopyDestinationFileType"',
-		// 		"body": "2"
-		// 	},
-		// 	{
-		// 		"Content-Disposition": 'form-data; name="rlCopyDestinationFileName"',
-		// 		"body": ""
-		// 	},
-		// 	{
-		// 		"Content-Disposition": 'form-data; name="rlCopyFreeHistoryIndex"',
-		// 		"body": "6"
-		// 	},
-		// 	{
-		// 		"Content-Disposition": 'form-data; name="srcFileName"; filename="running-config.txt',
-		// 		"Content-Type": "text/plain",
-		// 		"body": configFileContents
-		// 	}
-		// ]
 		formData: {
 			restoreUrl: "",
 			errorCollector: "",
@@ -71,7 +54,7 @@ console.log(`${address}/FileMgmt/httpConfigProcess.htm`);
 			srcFileName: {
 				value: configFileContents,
 				options: {
-					filename: "running-config.txt",
+					filename: `running-config-${ Math.floor(Math.random()*100000).toString() }.txt`,
 					contentType: "text/plain"
 				}
 			}
@@ -89,77 +72,81 @@ console.log(`${address}/FileMgmt/httpConfigProcess.htm`);
 }
 
 
-function getConfigUpdateRequest(address, sessionId, callback) {
-
-
-
-	request({
+function basicRequest(address, callback) {
+	requester({
 		method: 'GET',
-		uri: `${address}/FileMgmt/httpConfigProcess.htm`,
-		jar: jar,
-		
+		uri: address,
+	}, function(err, res, body) {
+		console.log(res.statusCode, body);
+		callback && callback()
+	})
+}
+
+// Some of linksys's requests are to pages that are just a form.
+// return all inputs and their value
+function getFormPageValues(address, callback) {
+	requester({uri: `${address}/FileMgmt/dlData.htm`},
+		function(err, res, body) {
+			var results = {};
+			var $ = cheerio.load(body);
+			$("input").each(function() {
+				var name = $(this).attr('name');
+				var val = $(this).val();
+				results[name] = val;
+			})
+			console.log(results);
+			callback(results);
+		}
+	)
+}
+
+function submitFormPageValues(address, formData, callback) {
+	requester({
+		method: 'POST',
+		uri: `${address}/FileMgmt/dlData.htm`,
+		formData: formData,
 		headers: {
-			"Referer": `${address}/home.htm`,
-			"User-Agent": "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:55.0) Gecko/20100101 Firefox/55.0"
+			Referer: `${address}/FileMgmt/dlData.htm`
 		}
 	}, function(err, res, body) {
 		console.log(res.statusCode, body);
 		callback && callback()
 	})
+}
 
+
+//maintenance_file_fileDownload_m.htm
+
+function makeRequester(path, referer) {
+	return function(callback) {
+		requester({
+		method: 'GET',
+		uri: address,
+	}, function(err, res, body) {
+		console.log(res.statusCode, body);
+		callback && callback()
+	})
+	}
+}
+function getConfigUpdateRequest(address, callback) {
+	basicRequest(`${address}/FileMgmt/httpConfigProcess.htm`, callback)
 }
 
 function getPortStatus(address, callback) {
-	request({
-		method: 'GET',
-		uri: `${address}/wcd?{ports}`,
-		jar: jar,
-		
-		headers: {
-			"Referer": `${address}/home.htm`,
-			"User-Agent": "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:55.0) Gecko/20100101 Firefox/55.0",
-			"Accept": "*/*"
-		}
-	}, function(err, res, body) {
-		console.log(res.statusCode, body);
-		callback && callback()
-	})
+	basicRequest(`${address}/wcd?{ports}`, callback)
 }
 
 function doAuthUser(address, callback) {
-	request({
-		method: 'GET',
-		uri: `${address}/device/authenticate_user.xml`,
-		jar: jar,
-		
-		headers: {
-			"Referer": `${address}/home.htm`,
-			"User-Agent": "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:55.0) Gecko/20100101 Firefox/55.0",
-			"Accept": "*/*"
-		}
-	}, function(err, res, body) {
-		console.log(res.statusCode, body);
-		callback && callback()
-	})
+	basicRequest(`${address}/device/authenticate_user.xml`, callback)	
 }
 
 function getCopyFiles(address, callback) {
-	request({
-		method: 'GET',
-		uri: `${address}/device/copyFiles.xml`,
-		jar: jar,
-		
-		headers: {
-			"Referer": `${address}/home.htm`,
-			"User-Agent": "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:55.0) Gecko/20100101 Firefox/55.0",
-			"Accept": "*/*"
-		}
-	}, function(err, res, body) {
-		console.log(res.statusCode, body);
-		callback && callback()
-	})
+	basicRequest(`${address}/device/copyFiles.xml`, callback)	
 }
 
+function getFileUploadPage(address, callback) {
+	basicRequest(`${address}/FileMgmt/maintenance_file_fileUpload_m.htm`, callback);
+}
 
 function fillJar(address, sessionId) {
 	var sessionCookie = request.cookie(`sessionID=${sessionId}`);
@@ -174,31 +161,106 @@ function fillJar(address, sessionId) {
 }
 
 
+
+function doAllShittyRequests(callback) {
+	var urls = ["http://192.168.1.251/csb114f712/device/Timestamp_MIB.xml?[rlEventsMaskTableVT]Query:rlEventsMaskPollerId=5",
+		"http://192.168.1.251/csb114f712/device/noStamp.xml",
+		"http://192.168.1.251/csb114f712/device/authenticate_user.xml",
+		"http://192.168.1.251/csb114f712/FileMgmt/maintenance_file_fileDownload_m.htm",
+		"http://192.168.1.251/csb114f712/styling/styling.css",
+		"http://192.168.1.251/csb114f712/css/ProjectStyling.css",
+		"http://192.168.1.251/csb114f712/js/pageTokens.js",
+		"http://192.168.1.251/csb114f712/js/initFunctions.js",
+		"http://192.168.1.251/csb114f712/js/globalFunctions.js",
+		"http://192.168.1.251/csb114f712/styling/styling.js",
+		"http://192.168.1.251/csb114f712/js/winInWin_m.js",
+		"http://192.168.1.251/csb114f712/js/projectLocalization.js",
+		"http://192.168.1.251/csb114f712/js/IPFormatSelectionHost.js",
+		"http://192.168.1.251/csb114f712/device/blank.html",
+		"http://192.168.1.251/csb114f712/styling/images/red3angle_left.gif",
+		"http://192.168.1.251/csb114f712/FileMgmt/httpConfigProcess.htm",
+		"http://192.168.1.251/csb114f712/styling/images/empty.gif",
+		"http://192.168.1.251/FileMgmt/HTTPmib.xml",
+		"http://192.168.1.251/csb114f712/images/radio_button.png",
+		"http://192.168.1.251/csb114f712/images/radio_button_on.png",
+		"http://192.168.1.251/csb114f712/images/dropdownarrows.gif",
+		"http://192.168.1.251/csb114f712/FileMgmt/HTTPmib.xml",
+		"http://192.168.1.251/csb114f712/styling/styling.css",
+		"http://192.168.1.251/csb114f712/css/ProjectStyling.css",
+		"http://192.168.1.251/csb114f712/styling/styling.js",
+		"http://192.168.1.251/csb114f712/js/pageTokens.js",
+		"http://192.168.1.251/csb114f712/js/projectLocalization.js",
+		"http://192.168.1.251/csb114f712/FileMgmt/dlData.htm",
+		"http://192.168.1.251/csb114f712/FileMgmt/dlData.htm?"]
+
+	var index = 0;
+	function doNextDownload() {
+		if (index >= urls.length) {
+			callback && callback();
+			return;
+		}
+
+		var ourUrl = urls[index++];
+		requester({
+			method: 'GET',
+			uri: ourUrl,
+		}, function(err, res, body) {
+			if (err) {
+				console.log(`Error reading ${ourUrl} - ${err}`);
+			} else {
+				console.log(`Got ${ourUrl} with result ${res.statusCode}`);
+			}
+			doNextDownload();
+		})	
+	}
+	doNextDownload();
+}
+
+
 doLoginRequest(address, username, password, function(sessionId) {
 	fillJar(address, sessionId);
 	console.log(sessionId);
+
+	// getFormPageValues(`${address}/FileMgmt/dlData.htm`, function() {
+
+	// });
+	// return;
+
 	if (sessionId) {
 		setTimeout(function() {
 			//
 			doAuthUser(address, function() {
+			//	getFormPageValues(address, function(formData) {
+				//	submitFormPageValues(address, formData, function() {
+
+			//	getFormPageValues(address, function(formData) {
+
 				//getPortStatus(address);
-				getCopyFiles(address, function() {
-					getConfigUpdateRequest(address, sessionId, function() {
-						setTimeout(function() {
-							doConfigUpdateRequest(address, sessionId, config, function() {
-								getCopyFiles(address, function() {
-																doConfigUpdateRequest(address, sessionId, config, function() {
+				getFileUploadPage(address, function() {
+//					getCopyFiles(address, function() {
+						//getConfigUpdateRequest(address, function() {
+							//setTimeout(function() {
+								doAllShittyRequests(function() {
+								doConfigUpdateRequest(address, sessionId, config, function() {
+									//getCopyFiles(address, function() {
+																	//doConfigUpdateRequest(address, sessionId, config, function() {
 
-							doConfigUpdateRequest(address, sessionId, config, function() {
+								//doConfigUpdateRequest(address, sessionId, config, function() {
 
-											getConfigUpdateRequest(address, sessionId, function() {
-											});
+												//getConfigUpdateRequest(address, function() {
+												//});
+									//});
 								});
-							});
-															}); });
-						}, 1000)
-					})
-				});
+																
+								})
+																//}); });
+							//}, 1000)
+						//})
+			//		});
+			//	});
+			//		})
+				})
+				//});
 			})
 		}, 1000)
 	} else {
@@ -208,3 +270,157 @@ doLoginRequest(address, username, password, function(sessionId) {
 
 
 
+
+
+
+var allRequests = [{
+  "url": "http://192.168.1.251/csb114f712/device/Timestamp_MIB.xml?[rlEventsMaskTableVT]Query:rlEventsMaskPollerId=5",
+  "type": "GET",
+  "referer": "http://192.168.1.251/csb114f712/home.htm"
+},
+{
+  "url": "http://192.168.1.251/csb114f712/device/noStamp.xml",
+  "type": "GET",
+  "referer": "http://192.168.1.251/csb114f712/home.htm"
+},
+{
+  "url": "http://192.168.1.251/csb114f712/device/authenticate_user.xml",
+  "type": "GET",
+  "referer": "http://192.168.1.251/csb114f712/home.htm"
+},
+{
+  "url": "http://192.168.1.251/csb114f712/FileMgmt/maintenance_file_fileDownload_m.htm",
+  "type": "GET",
+  "referer": "http://192.168.1.251/csb114f712/home.htm"
+},
+{
+  "url": "http://192.168.1.251/csb114f712/styling/styling.css",
+  "type": "GET",
+  "referer": "http://192.168.1.251/csb114f712/FileMgmt/maintenance_file_fileDownload_m.htm"
+},
+{
+  "url": "http://192.168.1.251/csb114f712/css/ProjectStyling.css",
+  "type": "GET",
+  "referer": "http://192.168.1.251/csb114f712/FileMgmt/maintenance_file_fileDownload_m.htm"
+},
+{
+  "url": "http://192.168.1.251/csb114f712/js/pageTokens.js",
+  "type": "GET",
+  "referer": "http://192.168.1.251/csb114f712/FileMgmt/maintenance_file_fileDownload_m.htm"
+},
+{
+  "url": "http://192.168.1.251/csb114f712/js/initFunctions.js",
+  "type": "GET",
+  "referer": "http://192.168.1.251/csb114f712/FileMgmt/maintenance_file_fileDownload_m.htm"
+},
+{
+  "url": "http://192.168.1.251/csb114f712/js/globalFunctions.js",
+  "type": "GET",
+  "referer": "http://192.168.1.251/csb114f712/FileMgmt/maintenance_file_fileDownload_m.htm"
+},
+{
+  "url": "http://192.168.1.251/csb114f712/styling/styling.js",
+  "type": "GET",
+  "referer": "http://192.168.1.251/csb114f712/FileMgmt/maintenance_file_fileDownload_m.htm"
+},
+{
+  "url": "http://192.168.1.251/csb114f712/js/winInWin_m.js",
+  "type": "GET",
+  "referer": "http://192.168.1.251/csb114f712/FileMgmt/maintenance_file_fileDownload_m.htm"
+},
+{
+  "url": "http://192.168.1.251/csb114f712/js/projectLocalization.js",
+  "type": "GET",
+  "referer": "http://192.168.1.251/csb114f712/FileMgmt/maintenance_file_fileDownload_m.htm"
+},
+{
+  "url": "http://192.168.1.251/csb114f712/js/IPFormatSelectionHost.js",
+  "type": "GET",
+  "referer": "http://192.168.1.251/csb114f712/FileMgmt/maintenance_file_fileDownload_m.htm"
+},
+{
+  "url": "http://192.168.1.251/csb114f712/device/blank.html",
+  "type": "GET",
+  "referer": "http://192.168.1.251/csb114f712/FileMgmt/maintenance_file_fileDownload_m.htm"
+},
+{
+  "url": "http://192.168.1.251/csb114f712/styling/images/red3angle_left.gif",
+  "type": "GET",
+  "referer": "http://192.168.1.251/csb114f712/FileMgmt/maintenance_file_fileDownload_m.htm"
+},
+{
+  "url": "http://192.168.1.251/csb114f712/FileMgmt/httpConfigProcess.htm",
+  "type": "GET",
+  "referer": "http://192.168.1.251/csb114f712/FileMgmt/maintenance_file_fileDownload_m.htm"
+},
+{
+  "url": "http://192.168.1.251/csb114f712/styling/images/empty.gif",
+  "type": "GET",
+  "referer": "http://192.168.1.251/csb114f712/FileMgmt/maintenance_file_fileDownload_m.htm"
+},
+{
+  "url": "http://192.168.1.251/FileMgmt/HTTPmib.xml",
+  "type": "GET",
+  "referer": "http://192.168.1.251/csb114f712/home.htm"
+},
+{
+  "url": "http://192.168.1.251/csb114f712/images/radio_button.png",
+  "type": "GET",
+  "referer": "http://192.168.1.251/csb114f712/css/ProjectStyling.css"
+},
+{
+  "url": "http://192.168.1.251/csb114f712/images/radio_button_on.png",
+  "type": "GET",
+  "referer": "http://192.168.1.251/csb114f712/css/ProjectStyling.css"
+},
+{
+  "url": "http://192.168.1.251/csb114f712/images/dropdownarrows.gif",
+  "type": "GET",
+  "referer": "http://192.168.1.251/csb114f712/styling/styling.css"
+},
+{
+  "url": "http://192.168.1.251/csb114f712/FileMgmt/HTTPmib.xml",
+  "type": "GET",
+  "referer": "http://192.168.1.251/csb114f712/home.htm"
+},
+{
+  "url": "http://192.168.1.251/csb114f712/styling/styling.css",
+  "type": "GET",
+  "referer": "http://192.168.1.251/csb114f712/FileMgmt/httpConfigProcess.htm"
+},
+{
+  "url": "http://192.168.1.251/csb114f712/css/ProjectStyling.css",
+  "type": "GET",
+  "referer": "http://192.168.1.251/csb114f712/FileMgmt/httpConfigProcess.htm"
+},
+{
+  "url": "http://192.168.1.251/csb114f712/styling/styling.js",
+  "type": "GET",
+  "referer": "http://192.168.1.251/csb114f712/FileMgmt/httpConfigProcess.htm"
+},
+{
+  "url": "http://192.168.1.251/csb114f712/js/pageTokens.js",
+  "type": "GET",
+  "referer": "http://192.168.1.251/csb114f712/FileMgmt/httpConfigProcess.htm"
+},
+{
+  "url": "http://192.168.1.251/csb114f712/js/projectLocalization.js",
+  "type": "GET",
+  "referer": "http://192.168.1.251/csb114f712/FileMgmt/httpConfigProcess.htm"
+},
+{
+  "url": "http://192.168.1.251/csb114f712/FileMgmt/dlData.htm",
+  "type": "GET",
+  "referer": "http://192.168.1.251/csb114f712/FileMgmt/maintenance_file_fileDownload_m.htm"
+},
+// {
+//   "url": "http://192.168.1.251/csb114f712/FileMgmt/dlData.htm",
+//   "type": "POST",
+//   "referer": "http://192.168.1.251/csb114f712/FileMgmt/dlData.htm"
+// },
+{
+  "url": "http://192.168.1.251/csb114f712/FileMgmt/dlData.htm?",
+  "type": "GET",
+  "referer": "http://192.168.1.251/csb114f712/FileMgmt/dlData.htm"
+}
+]
