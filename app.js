@@ -6,18 +6,22 @@ var request = require('request'),
 config = require("./config.json");
 var username = config.username,
     password = config.password,
-    address  = config.address,
-    config = fs.readFileSync(config['config-filename']);
+    host = config.host,
+    config = fs.readFileSync(config['config-filename']),
+    baseAddress = '';
 
 var jar = request.jar();
 var requester = request.defaults({
 	headers: {
-		"Referer": `${address}/home.htm`,
+//		"Referer": `${address}/home.htm`,
 		"User-Agent": "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:55.0) Gecko/20100101 Firefox/55.0",
 		"Accept": "*/*",
-		"Connection": "keep-alive"
+		"Connection": "keep-alive",
+		"Pragma": "no-cache",
+		"Cache-Control": "no-cache"
 	},
-	jar: jar
+	jar: jar,
+	followRedirect: false
 });
 
 //http://172.16.0.116/csb114f712/FileMgmt/httpConfigProcess.htm?
@@ -40,7 +44,7 @@ function doLoginRequest(base, user, pass, cb) {
 //cookie: admin_numberOfEntriesPerPage=50; activeLangId=English; isStackableDevice=false; sessionID=UserId=192.168.88.4&1806249400&; userStatus=ok; usernme=admin; firstWelcomeBanner=false; pg=00000000000000000000000000000000000000000000000000000
 function doConfigUpdateRequest(address, sessionId, configFileContents, callback) {
 
-console.log(`${address}/FileMgmt/httpConfigProcess.htm`);
+	console.log(`${address}/FileMgmt/httpConfigProcess.htm`);
 	request({
 		method: 'POST',
 		uri: `${address}/FileMgmt/httpConfigProcess.htm?`,
@@ -120,20 +124,36 @@ function submitFormPageValues(address, formData, callback) {
 }
 
 
+function getAddressBaseName(host, callback) {
+	console.log(`Resolving the web interface path ${host}`)
+	requester({
+		method: 'GET',
+		uri: `http://${host}/`,
+	}, function(err, res, body) {
+		if (err) { throw `Failed to get base name - ${err}`; }
+		callback && callback(res.headers.location)
+	})
+}
+
+
 //maintenance_file_fileDownload_m.htm
 
 function makeRequester(path, referer) {
+	if (referer) referer = `${baseAddress}${referer}`;
 	return function(callback) {
 		requester({
 		method: 'GET',
-		uri: path,
+		uri: `${baseAddress}${path}`,
+		headers: {
+			Referer: referer
+		}
 	}, function(err, res, body) {
 		callback && callback()
 	})
 	}
 }
 
-var dlDataResponse = makeRequester(`${address}/FileMgmt/dlData.html?`, `${address}/FileMgmt/dlData.htm`);
+var dlDataResponse = makeRequester(`/FileMgmt/dlData.html?`, `/FileMgmt/dlData.htm`);
 
 function getConfigUpdateRequest(address, callback) {
 	basicRequest(`${address}/FileMgmt/httpConfigProcess.htm`, callback)
@@ -197,17 +217,21 @@ function doAllShittyRequests(callback) {
 	doNextDownload();
 }
 
-doLoginRequest(address, username, password, function(sessionId) {
-	fillJar(address, sessionId);
-	doConfigUpdateRequest(address, sessionId, config, function() {
-	});
-});
+getAddressBaseName(host, function(baseAddressLocal) {
+	baseAddress = baseAddressLocal;
+	doLoginRequest(baseAddress, username, password, function(sessionId) {
+		fillJar(baseAddress, sessionId);
+		doConfigUpdateRequest(baseAddress, sessionId, config, function() {
+		});
+	});	
+})
+
 return;
-doLoginRequest(address, username, password, function(sessionId) {
-	fillJar(address, sessionId);
+doLoginRequest(baseAddress, username, password, function(sessionId) {
+	fillJar(baseAddress, sessionId);
 	console.log(sessionId);
 
-	// getFormPageValues(`${address}/FileMgmt/dlData.htm`, function() {
+	// getFormPageValues(`${baseAddress}/FileMgmt/dlData.htm`, function() {
 
 	// });
 	// return;
@@ -215,29 +239,29 @@ doLoginRequest(address, username, password, function(sessionId) {
 	if (sessionId) {
 		setTimeout(function() {
 			//
-			doAuthUser(address, function() {
+			doAuthUser(baseAddress, function() {
 				doAllShittyRequests(function() {
-				getFormPageValues(address, function(formData) {
-					submitFormPageValues(address, formData, function() {
+				getFormPageValues(baseAddress, function(formData) {
+					submitFormPageValues(baseAddress, formData, function() {
 
-				//getFormPageValues(address, function(formData) {
+				//getFormPageValues(baseAddress, function(formData) {
 					dlDataResponse(function() {
-				//getPortStatus(address);
-				//getFileUploadPage(address, function() {
-//					getCopyFiles(address, function() {
-						//getConfigUpdateRequest(address, function() {
+				//getPortStatus(baseAddress);
+				//getFileUploadPage(baseAddress, function() {
+//					getCopyFiles(baseAddress, function() {
+						//getConfigUpdateRequest(baseAddress, function() {
 							//setTimeout(function() {
-								jar.setCookie("sessionID=", address);
-								doLoginRequest(address, username, password, function(sessionId) {
-	fillJar(address, sessionId);
-								doConfigUpdateRequest(address, sessionId, config, function() {
+								jar.setCookie("sessionID=", baseAddress);
+								doLoginRequest(baseAddress, username, password, function(sessionId) {
+	fillJar(baseAddress, sessionId);
+								doConfigUpdateRequest(baseAddress, sessionId, config, function() {
 								});
-									//getCopyFiles(address, function() {
-																	//doConfigUpdateRequest(address, sessionId, config, function() {
+									//getCopyFiles(baseAddress, function() {
+																	//doConfigUpdateRequest(baseAddress, sessionId, config, function() {
 
-								//doConfigUpdateRequest(address, sessionId, config, function() {
+								//doConfigUpdateRequest(baseAddress, sessionId, config, function() {
 
-												//getConfigUpdateRequest(address, function() {
+												//getConfigUpdateRequest(baseAddress, function() {
 												//});
 									//});
 								});
@@ -264,154 +288,155 @@ doLoginRequest(address, username, password, function(sessionId) {
 
 
 var allRequests = [{
-  "url": "http://192.168.1.251/csb114f712/device/Timestamp_MIB.xml?[rlEventsMaskTableVT]Query:rlEventsMaskPollerId=5",
+  "url": `${baseAddress}/device/Timestamp_MIB.xml?[rlEventsMaskTableVT]Query:rlEventsMaskPollerId=5`,
   "type": "GET",
-  "referer": "http://192.168.1.251/csb114f712/home.htm"
+  "referer": `${baseAddress}/home.htm`
 },
 {
-  "url": "http://192.168.1.251/csb114f712/device/noStamp.xml",
+  "url": `${baseAddress}/device/noStamp.xml`,
   "type": "GET",
-  "referer": "http://192.168.1.251/csb114f712/home.htm"
+  "referer": `${baseAddress}/home.htm`
 },
 {
-  "url": "http://192.168.1.251/csb114f712/device/authenticate_user.xml",
+  "url": `${baseAddress}/device/authenticate_user.xml`,
   "type": "GET",
-  "referer": "http://192.168.1.251/csb114f712/home.htm"
+  "referer": `${baseAddress}/home.htm`
 },
 {
-  "url": "http://192.168.1.251/csb114f712/FileMgmt/maintenance_file_fileDownload_m.htm",
+  "url": `${baseAddress}/FileMgmt/maintenance_file_fileDownload_m.htm`,
   "type": "GET",
-  "referer": "http://192.168.1.251/csb114f712/home.htm"
+  "referer": `${baseAddress}/home.htm`
 },
 {
-  "url": "http://192.168.1.251/csb114f712/styling/styling.css",
+  "url": `${baseAddress}/styling/styling.css`,
   "type": "GET",
-  "referer": "http://192.168.1.251/csb114f712/FileMgmt/maintenance_file_fileDownload_m.htm"
+  "referer": `${baseAddress}/FileMgmt/maintenance_file_fileDownload_m.htm`
 },
 {
-  "url": "http://192.168.1.251/csb114f712/css/ProjectStyling.css",
+  "url": `${baseAddress}/css/ProjectStyling.css`,
   "type": "GET",
-  "referer": "http://192.168.1.251/csb114f712/FileMgmt/maintenance_file_fileDownload_m.htm"
+  "referer": `${baseAddress}/FileMgmt/maintenance_file_fileDownload_m.htm`
 },
 {
-  "url": "http://192.168.1.251/csb114f712/js/pageTokens.js",
+  "url": `${baseAddress}/js/pageTokens.js`,
   "type": "GET",
-  "referer": "http://192.168.1.251/csb114f712/FileMgmt/maintenance_file_fileDownload_m.htm"
+  "referer": `${baseAddress}/FileMgmt/maintenance_file_fileDownload_m.htm`
 },
 {
-  "url": "http://192.168.1.251/csb114f712/js/initFunctions.js",
+  "url": `${baseAddress}/js/initFunctions.js`,
   "type": "GET",
-  "referer": "http://192.168.1.251/csb114f712/FileMgmt/maintenance_file_fileDownload_m.htm"
+  "referer": `${baseAddress}/FileMgmt/maintenance_file_fileDownload_m.htm`
 },
 {
-  "url": "http://192.168.1.251/csb114f712/js/globalFunctions.js",
+  "url": `${baseAddress}/js/globalFunctions.js`,
   "type": "GET",
-  "referer": "http://192.168.1.251/csb114f712/FileMgmt/maintenance_file_fileDownload_m.htm"
+  "referer": `${baseAddress}/FileMgmt/maintenance_file_fileDownload_m.htm`
 },
 {
-  "url": "http://192.168.1.251/csb114f712/styling/styling.js",
+  "url": `${baseAddress}/styling/styling.js`,
   "type": "GET",
-  "referer": "http://192.168.1.251/csb114f712/FileMgmt/maintenance_file_fileDownload_m.htm"
+  "referer": `${baseAddress}/FileMgmt/maintenance_file_fileDownload_m.htm`
 },
 {
-  "url": "http://192.168.1.251/csb114f712/js/winInWin_m.js",
+  "url": `${baseAddress}/js/winInWin_m.js`,
   "type": "GET",
-  "referer": "http://192.168.1.251/csb114f712/FileMgmt/maintenance_file_fileDownload_m.htm"
+  "referer": `${baseAddress}/FileMgmt/maintenance_file_fileDownload_m.htm`
 },
 {
-  "url": "http://192.168.1.251/csb114f712/js/projectLocalization.js",
+  "url": `${baseAddress}/js/projectLocalization.js`,
   "type": "GET",
-  "referer": "http://192.168.1.251/csb114f712/FileMgmt/maintenance_file_fileDownload_m.htm"
+  "referer": `${baseAddress}/FileMgmt/maintenance_file_fileDownload_m.htm`
 },
 {
-  "url": "http://192.168.1.251/csb114f712/js/IPFormatSelectionHost.js",
+  "url": `${baseAddress}/js/IPFormatSelectionHost.js`,
   "type": "GET",
-  "referer": "http://192.168.1.251/csb114f712/FileMgmt/maintenance_file_fileDownload_m.htm"
+  "referer": `${baseAddress}/FileMgmt/maintenance_file_fileDownload_m.htm`
 },
 {
-  "url": "http://192.168.1.251/csb114f712/device/blank.html",
+  "url": `${baseAddress}/device/blank.html`,
   "type": "GET",
-  "referer": "http://192.168.1.251/csb114f712/FileMgmt/maintenance_file_fileDownload_m.htm"
+  "referer": `${baseAddress}/FileMgmt/maintenance_file_fileDownload_m.htm`
 },
 {
-  "url": "http://192.168.1.251/csb114f712/styling/images/red3angle_left.gif",
+  "url": `${baseAddress}/styling/images/red3angle_left.gif`,
   "type": "GET",
-  "referer": "http://192.168.1.251/csb114f712/FileMgmt/maintenance_file_fileDownload_m.htm"
+  "referer": `${baseAddress}/FileMgmt/maintenance_file_fileDownload_m.htm`
 },
 {
-  "url": "http://192.168.1.251/csb114f712/FileMgmt/httpConfigProcess.htm",
+  "url": `${baseAddress}/FileMgmt/httpConfigProcess.htm`,
   "type": "GET",
-  "referer": "http://192.168.1.251/csb114f712/FileMgmt/maintenance_file_fileDownload_m.htm"
+  "referer": `${baseAddress}/FileMgmt/maintenance_file_fileDownload_m.htm`
 },
 {
-  "url": "http://192.168.1.251/csb114f712/styling/images/empty.gif",
+  "url": `${baseAddress}/styling/images/empty.gif`,
   "type": "GET",
-  "referer": "http://192.168.1.251/csb114f712/FileMgmt/maintenance_file_fileDownload_m.htm"
+  "referer": `${baseAddress}/FileMgmt/maintenance_file_fileDownload_m.htm`
 },
 {
-  "url": "http://192.168.1.251/FileMgmt/HTTPmib.xml",
+  "url": `${baseAddress}/HTTPmib.xml`,
   "type": "GET",
-  "referer": "http://192.168.1.251/csb114f712/home.htm"
+  "referer": `${baseAddress}/home.htm`
 },
 {
-  "url": "http://192.168.1.251/csb114f712/images/radio_button.png",
+  "url": `${baseAddress}/images/radio_button.png`,
   "type": "GET",
-  "referer": "http://192.168.1.251/csb114f712/css/ProjectStyling.css"
+  "referer": `${baseAddress}/css/ProjectStyling.css`
 },
 {
-  "url": "http://192.168.1.251/csb114f712/images/radio_button_on.png",
+  "url": `${baseAddress}/images/radio_button_on.png`,
   "type": "GET",
-  "referer": "http://192.168.1.251/csb114f712/css/ProjectStyling.css"
+  "referer": `${baseAddress}/css/ProjectStyling.css`
 },
 {
-  "url": "http://192.168.1.251/csb114f712/images/dropdownarrows.gif",
+  "url": `${baseAddress}/images/dropdownarrows.gif`,
   "type": "GET",
-  "referer": "http://192.168.1.251/csb114f712/styling/styling.css"
+  "referer": `${baseAddress}/styling/styling.css`
 },
 {
-  "url": "http://192.168.1.251/csb114f712/FileMgmt/HTTPmib.xml",
+  "url": `${baseAddress}/FileMgmt/HTTPmib.xml`,
   "type": "GET",
-  "referer": "http://192.168.1.251/csb114f712/home.htm"
+  "referer": `${baseAddress}/home.htm`
 },
 {
-  "url": "http://192.168.1.251/csb114f712/styling/styling.css",
+  "url": `${baseAddress}/styling/styling.css`,
   "type": "GET",
-  "referer": "http://192.168.1.251/csb114f712/FileMgmt/httpConfigProcess.htm"
+  "referer": `${baseAddress}/FileMgmt/httpConfigProcess.htm`
 },
 {
-  "url": "http://192.168.1.251/csb114f712/css/ProjectStyling.css",
+  "url": `${baseAddress}/css/ProjectStyling.css`,
   "type": "GET",
-  "referer": "http://192.168.1.251/csb114f712/FileMgmt/httpConfigProcess.htm"
+  "referer": `${baseAddress}/FileMgmt/httpConfigProcess.htm`
 },
 {
-  "url": "http://192.168.1.251/csb114f712/styling/styling.js",
+  "url": `${baseAddress}/styling/styling.js`,
   "type": "GET",
-  "referer": "http://192.168.1.251/csb114f712/FileMgmt/httpConfigProcess.htm"
+  "referer": `${baseAddress}/FileMgmt/httpConfigProcess.htm`
 },
 {
-  "url": "http://192.168.1.251/csb114f712/js/pageTokens.js",
+  "url": `${baseAddress}/js/pageTokens.js`,
   "type": "GET",
-  "referer": "http://192.168.1.251/csb114f712/FileMgmt/httpConfigProcess.htm"
+  "referer": `${baseAddress}/FileMgmt/httpConfigProcess.htm`
 },
 {
-  "url": "http://192.168.1.251/csb114f712/js/projectLocalization.js",
+  "url": `${baseAddress}/js/projectLocalization.js`,
   "type": "GET",
-  "referer": "http://192.168.1.251/csb114f712/FileMgmt/httpConfigProcess.htm"
+  "referer": `${baseAddress}/FileMgmt/httpConfigProcess.htm`
 }
-//,
+// ,
 // {
-//   "url": "http://192.168.1.251/csb114f712/FileMgmt/dlData.htm",
+//   "url": `${baseAddress}/FileMgmt/dlData.htm`,
 //   "type": "GET",
-//   "referer": "http://192.168.1.251/csb114f712/FileMgmt/maintenance_file_fileDownload_m.htm"
+//   "referer": `${baseAddress}/FileMgmt/maintenance_file_fileDownload_m.htm`
 // },
 // {
-//   "url": "http://192.168.1.251/csb114f712/FileMgmt/dlData.htm",
+//   "url": `${baseAddress}/FileMgmt/dlData.htm`,
 //   "type": "POST",
-//   "referer": "http://192.168.1.251/csb114f712/FileMgmt/dlData.htm"
+//   "referer": `${baseAddress}/FileMgmt/dlData.htm`
 // },
 // {
-//   "url": "http://192.168.1.251/csb114f712/FileMgmt/dlData.htm?",
+//   "url": `${baseAddress}/FileMgmt/dlData.htm`,
 //   "type": "GET",
-//   "referer": "http://192.168.1.251/csb114f712/FileMgmt/dlData.htm"
+//   "referer": `${baseAddress}/FileMgmt/dlData.htm`
 // }
+
 ]
