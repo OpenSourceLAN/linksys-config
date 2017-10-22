@@ -189,7 +189,7 @@ function fillJar(address, sessionId) {
 
 
 
-function doAllShittyRequests(callback) {
+function doAllShittyRequests(baseAddress, callback) {
 
 	var index = 0;
 	function doNextDownload() {
@@ -201,9 +201,9 @@ function doAllShittyRequests(callback) {
 		var ourUrl = allRequests[index++];
 		requester({
 			method: 'GET',
-			uri: ourUrl.url,
+			uri: `${baseAddress}${ourUrl.url}`,
 			headers: {
-				"Referer": ourUrl.referer
+				"Referer": `${baseAddress}${ourUrl.referer}`
 			}
 		}, function(err, res, body) {
 			if (err) {
@@ -217,70 +217,100 @@ function doAllShittyRequests(callback) {
 	doNextDownload();
 }
 
+// This block of callback hell mimmicks _almost_ exactly the set of requests that
+// happen when you load the magic page in the browser. Then, at the end we submit
+// the config update.
 getAddressBaseName(host, function(baseAddressLocal) {
 	baseAddress = baseAddressLocal;
 	doLoginRequest(baseAddress, username, password, function(sessionId) {
 		fillJar(baseAddress, sessionId);
-		doConfigUpdateRequest(baseAddress, sessionId, config, function() {
+		doAllShittyRequests(baseAddress, function() {
+			getFormPageValues(baseAddress, function(formData) {
+				submitFormPageValues(baseAddress, formData, function() {
+					getFormPageValues(baseAddress, function(formData) {
+						doConfigUpdateRequest(baseAddress, sessionId, config, function() {
+						})
+					})
+				})
+			});
 		});
 	});	
 })
 
-return;
-doLoginRequest(baseAddress, username, password, function(sessionId) {
-	fillJar(baseAddress, sessionId);
-	console.log(sessionId);
+// This is the minimal MVP of requests that work after you click the magic page
+// in the web browser.
+// getAddressBaseName(host, function(baseAddressLocal) {
+// 	baseAddress = baseAddressLocal;
+// 	doLoginRequest(baseAddress, username, password, function(sessionId) {
+// 		fillJar(baseAddress, sessionId);
+// 		doConfigUpdateRequest(baseAddress, sessionId, config, function() {
+// 		})
+// 	});	
+// })
 
-	// getFormPageValues(`${baseAddress}/FileMgmt/dlData.htm`, function() {
 
-	// });
-	// return;
 
-	if (sessionId) {
-		setTimeout(function() {
-			//
-			doAuthUser(baseAddress, function() {
-				doAllShittyRequests(function() {
-				getFormPageValues(baseAddress, function(formData) {
-					submitFormPageValues(baseAddress, formData, function() {
 
-				//getFormPageValues(baseAddress, function(formData) {
-					dlDataResponse(function() {
-				//getPortStatus(baseAddress);
-				//getFileUploadPage(baseAddress, function() {
-//					getCopyFiles(baseAddress, function() {
-						//getConfigUpdateRequest(baseAddress, function() {
-							//setTimeout(function() {
-								jar.setCookie("sessionID=", baseAddress);
-								doLoginRequest(baseAddress, username, password, function(sessionId) {
-	fillJar(baseAddress, sessionId);
-								doConfigUpdateRequest(baseAddress, sessionId, config, function() {
-								});
-									//getCopyFiles(baseAddress, function() {
-																	//doConfigUpdateRequest(baseAddress, sessionId, config, function() {
 
-								//doConfigUpdateRequest(baseAddress, sessionId, config, function() {
 
-												//getConfigUpdateRequest(baseAddress, function() {
-												//});
-									//});
-								});
+
+
+
+
+// doLoginRequest(baseAddress, username, password, function(sessionId) {
+// 	fillJar(baseAddress, sessionId);
+// 	console.log(sessionId);
+
+// 	// getFormPageValues(`${baseAddress}/FileMgmt/dlData.htm`, function() {
+
+// 	// });
+// 	// return;
+
+// 	if (sessionId) {
+// 		setTimeout(function() {
+// 			//
+// 			doAuthUser(baseAddress, function() {
+// 				doAllShittyRequests(baseAddress, function() {
+// 				getFormPageValues(baseAddress, function(formData) {
+// 					submitFormPageValues(baseAddress, formData, function() {
+
+// 				//getFormPageValues(baseAddress, function(formData) {
+// 					dlDataResponse(function() {
+// 				//getPortStatus(baseAddress);
+// 				//getFileUploadPage(baseAddress, function() {
+// //					getCopyFiles(baseAddress, function() {
+// 						//getConfigUpdateRequest(baseAddress, function() {
+// 							//setTimeout(function() {
+// 								jar.setCookie("sessionID=", baseAddress);
+// 								doLoginRequest(baseAddress, username, password, function(sessionId) {
+// 	fillJar(baseAddress, sessionId);
+// 								doConfigUpdateRequest(baseAddress, sessionId, config, function() {
+// 								});
+// 									//getCopyFiles(baseAddress, function() {
+// 																	//doConfigUpdateRequest(baseAddress, sessionId, config, function() {
+
+// 								//doConfigUpdateRequest(baseAddress, sessionId, config, function() {
+
+// 												//getConfigUpdateRequest(baseAddress, function() {
+// 												//});
+// 									//});
+// 								});
 																
-								})
-																//}); });
-							//}, 1000)
-						})
-					});
-			//	});
-			//		})
-				})
-				//});
-			})
-		}, 1000)
-	} else {
-		console.log("Couldn't get session ID");
-	}
-})
+// 								})
+// 																//}); });
+// 							//}, 1000)
+// 						})
+// 					});
+// 			//	});
+// 			//		})
+// 				})
+// 				//});
+// 			})
+// 		}, 1000)
+// 	} else {
+// 		console.log("Couldn't get session ID");
+// 	}
+// })
 
 
 
@@ -288,155 +318,155 @@ doLoginRequest(baseAddress, username, password, function(sessionId) {
 
 
 var allRequests = [{
-  "url": `${baseAddress}/device/Timestamp_MIB.xml?[rlEventsMaskTableVT]Query:rlEventsMaskPollerId=5`,
+  "url": `/device/Timestamp_MIB.xml?[rlEventsMaskTableVT]Query:rlEventsMaskPollerId=5`,
   "type": "GET",
-  "referer": `${baseAddress}/home.htm`
+  "referer": `/home.htm`
 },
 {
-  "url": `${baseAddress}/device/noStamp.xml`,
+  "url": `/device/noStamp.xml`,
   "type": "GET",
-  "referer": `${baseAddress}/home.htm`
+  "referer": `/home.htm`
 },
 {
-  "url": `${baseAddress}/device/authenticate_user.xml`,
+  "url": `/device/authenticate_user.xml`,
   "type": "GET",
-  "referer": `${baseAddress}/home.htm`
+  "referer": `/home.htm`
 },
 {
-  "url": `${baseAddress}/FileMgmt/maintenance_file_fileDownload_m.htm`,
+  "url": `/FileMgmt/maintenance_file_fileDownload_m.htm`,
   "type": "GET",
-  "referer": `${baseAddress}/home.htm`
+  "referer": `/home.htm`
 },
 {
-  "url": `${baseAddress}/styling/styling.css`,
+  "url": `/styling/styling.css`,
   "type": "GET",
-  "referer": `${baseAddress}/FileMgmt/maintenance_file_fileDownload_m.htm`
+  "referer": `/FileMgmt/maintenance_file_fileDownload_m.htm`
 },
 {
-  "url": `${baseAddress}/css/ProjectStyling.css`,
+  "url": `/css/ProjectStyling.css`,
   "type": "GET",
-  "referer": `${baseAddress}/FileMgmt/maintenance_file_fileDownload_m.htm`
+  "referer": `/FileMgmt/maintenance_file_fileDownload_m.htm`
 },
 {
-  "url": `${baseAddress}/js/pageTokens.js`,
+  "url": `/js/pageTokens.js`,
   "type": "GET",
-  "referer": `${baseAddress}/FileMgmt/maintenance_file_fileDownload_m.htm`
+  "referer": `/FileMgmt/maintenance_file_fileDownload_m.htm`
 },
 {
-  "url": `${baseAddress}/js/initFunctions.js`,
+  "url": `/js/initFunctions.js`,
   "type": "GET",
-  "referer": `${baseAddress}/FileMgmt/maintenance_file_fileDownload_m.htm`
+  "referer": `/FileMgmt/maintenance_file_fileDownload_m.htm`
 },
 {
-  "url": `${baseAddress}/js/globalFunctions.js`,
+  "url": `/js/globalFunctions.js`,
   "type": "GET",
-  "referer": `${baseAddress}/FileMgmt/maintenance_file_fileDownload_m.htm`
+  "referer": `/FileMgmt/maintenance_file_fileDownload_m.htm`
 },
 {
-  "url": `${baseAddress}/styling/styling.js`,
+  "url": `/styling/styling.js`,
   "type": "GET",
-  "referer": `${baseAddress}/FileMgmt/maintenance_file_fileDownload_m.htm`
+  "referer": `/FileMgmt/maintenance_file_fileDownload_m.htm`
 },
 {
-  "url": `${baseAddress}/js/winInWin_m.js`,
+  "url": `/js/winInWin_m.js`,
   "type": "GET",
-  "referer": `${baseAddress}/FileMgmt/maintenance_file_fileDownload_m.htm`
+  "referer": `/FileMgmt/maintenance_file_fileDownload_m.htm`
 },
 {
-  "url": `${baseAddress}/js/projectLocalization.js`,
+  "url": `/js/projectLocalization.js`,
   "type": "GET",
-  "referer": `${baseAddress}/FileMgmt/maintenance_file_fileDownload_m.htm`
+  "referer": `/FileMgmt/maintenance_file_fileDownload_m.htm`
 },
 {
-  "url": `${baseAddress}/js/IPFormatSelectionHost.js`,
+  "url": `/js/IPFormatSelectionHost.js`,
   "type": "GET",
-  "referer": `${baseAddress}/FileMgmt/maintenance_file_fileDownload_m.htm`
+  "referer": `/FileMgmt/maintenance_file_fileDownload_m.htm`
 },
 {
-  "url": `${baseAddress}/device/blank.html`,
+  "url": `/device/blank.html`,
   "type": "GET",
-  "referer": `${baseAddress}/FileMgmt/maintenance_file_fileDownload_m.htm`
+  "referer": `/FileMgmt/maintenance_file_fileDownload_m.htm`
 },
 {
-  "url": `${baseAddress}/styling/images/red3angle_left.gif`,
+  "url": `/styling/images/red3angle_left.gif`,
   "type": "GET",
-  "referer": `${baseAddress}/FileMgmt/maintenance_file_fileDownload_m.htm`
+  "referer": `/FileMgmt/maintenance_file_fileDownload_m.htm`
 },
 {
-  "url": `${baseAddress}/FileMgmt/httpConfigProcess.htm`,
+  "url": `/FileMgmt/httpConfigProcess.htm`,
   "type": "GET",
-  "referer": `${baseAddress}/FileMgmt/maintenance_file_fileDownload_m.htm`
+  "referer": `/FileMgmt/maintenance_file_fileDownload_m.htm`
 },
 {
-  "url": `${baseAddress}/styling/images/empty.gif`,
+  "url": `/styling/images/empty.gif`,
   "type": "GET",
-  "referer": `${baseAddress}/FileMgmt/maintenance_file_fileDownload_m.htm`
+  "referer": `/FileMgmt/maintenance_file_fileDownload_m.htm`
 },
 {
-  "url": `${baseAddress}/HTTPmib.xml`,
+  "url": `/HTTPmib.xml`,
   "type": "GET",
-  "referer": `${baseAddress}/home.htm`
+  "referer": `/home.htm`
 },
 {
-  "url": `${baseAddress}/images/radio_button.png`,
+  "url": `/images/radio_button.png`,
   "type": "GET",
-  "referer": `${baseAddress}/css/ProjectStyling.css`
+  "referer": `/css/ProjectStyling.css`
 },
 {
-  "url": `${baseAddress}/images/radio_button_on.png`,
+  "url": `/images/radio_button_on.png`,
   "type": "GET",
-  "referer": `${baseAddress}/css/ProjectStyling.css`
+  "referer": `/css/ProjectStyling.css`
 },
 {
-  "url": `${baseAddress}/images/dropdownarrows.gif`,
+  "url": `/images/dropdownarrows.gif`,
   "type": "GET",
-  "referer": `${baseAddress}/styling/styling.css`
+  "referer": `/styling/styling.css`
 },
 {
-  "url": `${baseAddress}/FileMgmt/HTTPmib.xml`,
+  "url": `/FileMgmt/HTTPmib.xml`,
   "type": "GET",
-  "referer": `${baseAddress}/home.htm`
+  "referer": `/home.htm`
 },
 {
-  "url": `${baseAddress}/styling/styling.css`,
+  "url": `/styling/styling.css`,
   "type": "GET",
-  "referer": `${baseAddress}/FileMgmt/httpConfigProcess.htm`
+  "referer": `/FileMgmt/httpConfigProcess.htm`
 },
 {
-  "url": `${baseAddress}/css/ProjectStyling.css`,
+  "url": `/css/ProjectStyling.css`,
   "type": "GET",
-  "referer": `${baseAddress}/FileMgmt/httpConfigProcess.htm`
+  "referer": `/FileMgmt/httpConfigProcess.htm`
 },
 {
-  "url": `${baseAddress}/styling/styling.js`,
+  "url": `/styling/styling.js`,
   "type": "GET",
-  "referer": `${baseAddress}/FileMgmt/httpConfigProcess.htm`
+  "referer": `/FileMgmt/httpConfigProcess.htm`
 },
 {
-  "url": `${baseAddress}/js/pageTokens.js`,
+  "url": `/js/pageTokens.js`,
   "type": "GET",
-  "referer": `${baseAddress}/FileMgmt/httpConfigProcess.htm`
+  "referer": `/FileMgmt/httpConfigProcess.htm`
 },
 {
-  "url": `${baseAddress}/js/projectLocalization.js`,
+  "url": `/js/projectLocalization.js`,
   "type": "GET",
-  "referer": `${baseAddress}/FileMgmt/httpConfigProcess.htm`
+  "referer": `/FileMgmt/httpConfigProcess.htm`
 }
 // ,
 // {
-//   "url": `${baseAddress}/FileMgmt/dlData.htm`,
+//   "url": `/FileMgmt/dlData.htm`,
 //   "type": "GET",
-//   "referer": `${baseAddress}/FileMgmt/maintenance_file_fileDownload_m.htm`
+//   "referer": `/FileMgmt/maintenance_file_fileDownload_m.htm`
 // },
 // {
-//   "url": `${baseAddress}/FileMgmt/dlData.htm`,
+//   "url": `/FileMgmt/dlData.htm`,
 //   "type": "POST",
-//   "referer": `${baseAddress}/FileMgmt/dlData.htm`
+//   "referer": `/FileMgmt/dlData.htm`
 // },
 // {
-//   "url": `${baseAddress}/FileMgmt/dlData.htm`,
+//   "url": `/FileMgmt/dlData.htm`,
 //   "type": "GET",
-//   "referer": `${baseAddress}/FileMgmt/dlData.htm`
+//   "referer": `/FileMgmt/dlData.htm`
 // }
 
 ]
