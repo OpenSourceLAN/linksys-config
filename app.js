@@ -1,9 +1,22 @@
 
 var request = require('request'),
     fs = require('fs'),
-    cheerio = require('cheerio');
+    cheerio = require('cheerio'),
+    process = require('process'),
+    fs = require('fs'),
+    inventory = require('./inventory.js'),
+    async = require('async'),
+    headless = require ('./headless.js');;
 
-config = require("./config.json");
+configname = process.argv[process.argv.length -1];
+
+if (process.argv.length <= 2 || fs.existsSync(configname) == false) 
+	configname = "./config.json";
+
+config = require(configname);
+console.log(config);
+console.log(configname);
+console.log(process.argv);
 var username = config.username,
     password = config.password,
     host = config.host,
@@ -123,14 +136,61 @@ function doConfigurationUpload(callback) {
 
 // Launch a Chromium headless window, to browse to the magic page
 // then upload config, and then close Chrome again.
-getAddressBaseName(host, function(baseAddressLocal) {
-	var headless = require ('./headless.js');
-	console.log(baseAddressLocal);
-	baseAddress = baseAddressLocal;
-	var h = new headless(baseAddressLocal, username, password, function() {
-		doConfigurationUpload(function() {
-			h.close();
+// getAddressBaseName(host, function(baseAddressLocal) {
+// 	console.log(baseAddressLocal);
+// 	baseAddress = baseAddressLocal;
+// 	var h = new headless(baseAddressLocal, username, password, null, function() { //"/home/sirsquidness/respawn/pax/linksys/LGS500-11027.ros"
+// 		doConfigurationUpload(function() {
+// 			h.close();
+// 		});
+// 	});
+// });
+
+
+function getModelsToUpdateFromCommandLine(inventoryList) {
+	// remove node script.js from arvg
+	args = process.argv.slice(2).map((arg) => arg.toLowerCase());
+	if (args.length == 0) {
+		console.log("No switches given. List individual switch IDs as arguments, or just 'all'")
+		process.exit(1);
+	}
+	if (args.length == 1 && args[0].toLowerCase() == "all") {
+		return inventoryList;
+	}
+	return inventoryList.filter((inv) => {
+		return args.indexOf(inv['id'].toLowerCase()) !== -1
+	})
+}
+
+function getListOfFunctionsToRun(inventoryList) {
+	return inventoryList.map((inv) => function(callback) {
+		processInventoryItem(inv, callback);
+	})
+}
+
+function processInventoryItem(inv, callback) {
+
+	// TODO:
+	// * Get the base address for this switch model
+	// * Generate template file
+	// * Create Chromium session
+	// * Upload config file
+
+	console.log(`processing ${inv['id']}`);
+
+	getAddressBaseName(inv['ip'], function(baseAddressLocal) {
+		console.log(`switch ${inv['id']} has base address ${baseAddressLocal}`);
+		var h = new headless(baseAddressLocal, username, password, null, function() {
+			callback(null);
 		});
 	});
-});
+}
 
+inventory('1P_nDaT90eXK1NSvxhWaYdM42Llw0pqYmoH3xQF7ZVgQ', (err, inventoryList) => {
+	const targets = getModelsToUpdateFromCommandLine(inventoryList);
+
+	async.parallelLimit(getListOfFunctionsToRun(targets), 10, (err, res) => {
+		console.log(`Done with err: ${err} and result ${res} `)
+	})
+
+})
