@@ -1,0 +1,6 @@
+{
+	"username": "admin",
+	"password": "admin",
+	"generated_config_directory": "./config/",
+	"google_spreadsheet_id": "the_id_of_your_google_spreadsheet_here"
+}

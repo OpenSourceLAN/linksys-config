@@ -78,7 +78,7 @@ function listMajors(auth, sheet, callback) {
   const sheets = google.sheets({version: 'v4', auth});
   sheets.spreadsheets.values.get({
     spreadsheetId: sheet,
-    range: 'Sheet1!A2:F',
+    range: 'Sheet1!A2:G',
   }, (err, res) => {
     if (err) return callback('The API returned an error: ' + err);
     const rows = res.data.values;

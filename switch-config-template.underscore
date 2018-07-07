@@ -1,0 +1,159 @@
+config-file-header
+<%= hostname %>
+v1.1.0.21
+CLI v1.0
+set system 
+@
+port jumbo-frame
+vlan database
+vlan 1,10-11,16-20 
+exit
+voice vlan oui-table add 0001e3 Siemens_AG_phone________
+voice vlan oui-table add 00036b Cisco_phone_____________
+voice vlan oui-table add 00096e Avaya___________________
+voice vlan oui-table add 000fe2 H3C_Aolynk______________
+voice vlan oui-table add 0060b9 Philips_and_NEC_AG_phone
+voice vlan oui-table add 00d01e Pingtel_phone___________
+voice vlan oui-table add 00e075 Polycom/Veritel_phone___
+voice vlan oui-table add 00e0bb 3Com_phone______________
+hostname <%= hostname %>
+username admin password encrypted 263603574784294369c6b498bedfbba2a2de69f1 privilege 15 
+snmp-server server
+snmp-server location <%= location %>
+snmp-server community <%= snmppassword%> ro view Default 
+clock timezone " " 0 minutes 0
+clock source sntp
+sntp unicast client enable
+sntp unicast client poll
+sntp server ntp.pax.lan poll 
+ip name-server  10.10.0.1
+!
+!
+interface vlan 1
+ ip address <%= ip %> 255.255.0.0 
+ no ip address dhcp 
+!
+interface vlan 10
+ name Internet 
+!
+interface vlan 11
+ name Servers 
+!
+interface vlan 16
+ name PCFP 
+!
+interface vlan 17
+ name BYOC 
+!
+interface vlan 18
+ name Staff 
+!
+interface vlan 19
+ name Wifi 
+!
+interface vlan 20
+ name NothingVLAN 
+!
+<% 
+// Write out each port's configuration
+_.range(1,num_access_ports+1).forEach((portnum) => { %> 
+interface gigabitethernet<%= portnum %>
+ storm-control broadcast enable 
+ storm-control broadcast level kbps 400000 
+ storm-control include-multicast unknown-unicast 
+ switchport mode access
+ switchport access vlan <%= access_vlan %>
+!
+<%
+})
+
+var ten_gig_uplinks = num_ten_gig_ports > 0;
+var port_channel_link_type = (ten_gig_uplinks ? "ten" : "") + "gigabitethernet"
+
+// Calculate the trunk ports
+first_trunk = ten_gig_uplinks ? 1 : num_access_ports + 1;
+last_trunk = num_access_ports+num_trunk_ports;
+
+_.range(first_trunk, last_trunk+1).forEach((portnum) => {
+	%>
+interface <%= port_channel_link_type + portnum %>
+ channel-group 1 mode auto 
+!
+<% }) %>
+interface Port-channel1
+ switchport trunk allowed vlan add <%= uplink_trunk_vlans.join(",") %>
+!
+exit
+ip default-gateway 10.1.0.1 
+crypto certificate 1 import
+-----BEGIN RSA PRIVATE KEY-----
+MIICXQIBAAKBgQD2SfCJtQizfadspIV9xvwhlGk/ybZG9A0ur5vuruL9/zTR4U+V2q+gYs
+m2/J3J6U9OkiJW7SF0UpETSkKwM7bUNsa86raMLHwZoa9by+5GCqg6GHlNz4bRYOkhr61n
+rEEwjjKu2zIuOmFls79Los4FGHsaF/B8F1uQKCHYEhyQ+QIDAQABAoGAVCwE9ytV4/InzC
+uWK9xbwyYzqkdH8ovqDXCa/EHs9h3IcYptZquspkXc5psDWkRQhGvRLKAydMzbJBqXHB0w
+eD70he3KJF3XyFkjvFXRB4pTwM3p8FUapkLPM13egOOGirFA5ZmWdcDo2p/2529/R+JCjC
+DWCmzOHF6uYiZasLkCQQD9P16nwZf1n4XqX0LXMDD/+Hz4rWC85+KPQe03MTBqzgB9Filr
+/b++p6lsqeb/d485mi1CNzRL8m57VUI0bnbzAkEA+Pc1RX5QIZnTdbTAoh0jVgnWNFyB8V
+Oef3sEIlSXm1a5wAMAKOmBtw+fa4bIEiafjFREpN8qo7K5hP4idt9rYwJBANKu95ZkjoE/
+d29mVPslEn7BQWa5BrPhzjAUTr8N4xPX0bw+xbMb5Xs9jMvkBVMfKj5nr6NYvd85DwT4Bx
+4LkFUCQQC/z9YfIF4kRRuCCCyRudlLpHCADvWeNEpc9S4ONRZI+9xIbwdkfeMOYt70PPdP
+5Knvt8zbKYT0cfI04Ic1BpT5AkAn8BN1AWeOo9P02Jg+jNWkIH93IvGG8reO5zjUignlXg
+Lr5gOkMnI0eaLFDsbmp0fYC+mWN7oKuThxL9pq8FAR
+-----END RSA PRIVATE KEY-----
+
+-----BEGIN RSA PUBLIC KEY-----
+MIGJAoGBAPZJ8Im1CLN9p2ykhX3G/CGUaT/Jtkb0DS6vm+6u4v3/NNHhT5Xar6Biybb8nc
+npT06SIlbtIXRSkRNKQrAzttQ2xrzqtowsfBmhr1vL7kYKqDoYeU3PhtFg6SGvrWesQTCO
+Mq7bMi46YWWzv0uizgUYexoX8HwXW5AoIdgSHJD5AgMBAAE=
+-----END RSA PUBLIC KEY-----
+-----BEGIN CERTIFICATE-----
+MIICHDCCAYUCEFb04ikmoqhMkfH62iF/gYcwDQYJKoZIhvcNAQEFBQAwTzELMAkG
+A1UEBhMCICAxCjAIBgNVBAgTASAxCjAIBgNVBAcTASAxEDAOBgNVBAMTBzAuMC4w
+LjAxCjAIBgNVBAoTASAxCjAIBgNVBAsTASAwHhcNMTQwOTA4MTIyMDAyWhcNMTUw
+OTA4MTIyMDAyWjBPMQswCQYDVQQGEwIgIDEKMAgGA1UECBMBIDEKMAgGA1UEBxMB
+IDEQMA4GA1UEAxMHMC4wLjAuMDEKMAgGA1UEChMBIDEKMAgGA1UECxMBIDCBnzAN
+BgkqhkiG9w0BAQEFAAOBjQAwgYkCgYEA9knwibUIs32nbKSFfcb8IZRpP8m2RvQN
+Lq+b7q7i/f800eFPldqvoGLJtvydyelPTpIiVu0hdFKRE0pCsDO21DbGvOq2jCx8
+GaGvW8vuRgqoOhh5Tc+G0WDpIa+tZ6xBMI4yrtsyLjphZbO/S6LOBRh7GhfwfBdb
+kCgh2BIckPkCAwEAATANBgkqhkiG9w0BAQUFAAOBgQBc3EMZ+u8RRGJ9ih9Yprac
+/uPAlPrUFJszLOxwQOr2meeqfHDVOZp167bq0AZzeJ4xD9PnYLvOo4BcPiro/bG1
+VqAF8aLF9orJQEMO9obQYfalsjUh1z4mysIt+cX+0w/hOf+7HdCKx18+wbcviXpj
+lb4CaBb6adWDMWau0n1dFg==
+-----END CERTIFICATE-----
+.
+crypto certificate 2 import
+-----BEGIN RSA PRIVATE KEY-----
+MIICXQIBAAKBgQC7pd02vMDGv8rLDobdjGRciz4P8F3jcR++5syjng5F2VbLRwfqf9sRyq
+2MREUWIHasp5hxaod+uCVnueD+iDUyrCK92mmXFtcj/u0D5J+HZYHys/1wB2g0F1skYI4j
+UeRaDqWikjqO5dZvvxmAKNXtbLeppxa5m5JPSt4OhGjpEwIDAQABAoGBAJkTB1BdzgzT7E
+SVRyN4IW71D93EwXKGl9UNRia7Cv2j/I+7FBQR1M3Avq5MCuev99+EoHD07C9NXQYutgIt
+bubPsCaxSjh2Cha7JDDRmfHv4wg7UuuhIhpqA/LSB8JMMfobIeErrb0fhbvahnINMcPFiF
+JPhmugjS2ZXpUA8R9RAkEA3mXj5WgOBnaKxfeY9fLWApWB9lpd84SEPVFDLzATFMojLhQM
+epJjY/FN+z6tHYKDn8To6cftD9WVtL0S/zI2VQJBANf/4NYAT42wOgqaIYRPVuyCnXkFyO
+GXw3IKlZfKIKdY3+KNGlURtoxeOaOWutrPZpYLIHiKzWS+7UobSE9o+ccCQFRMGKLW2yIW
+AqnhHMh04Cugkd9YB26LVziKucWEGmdx6v3HOaeoHyY9y8okyqd51fxUPdiHIFM1KQaV+E
+JkvPUCQQC1qdggRCykXxXBuvX7gHr7+bKViZ701R4k+O/ttKsX9DCAKup9p6MflVPm2SuY
+Qhzmjr8lgp/SXp3V2PJND14bAkBh6tXPWeXO6FP/xalHdpkDLZQCrYgMsuvR6BUl1DnJfG
+rkvVUqVeUX3OO9Ii7egXrIhzE3hm9sl6QjPkwv5JqJ
+-----END RSA PRIVATE KEY-----
+
+-----BEGIN RSA PUBLIC KEY-----
+MIGJAoGBALul3Ta8wMa/yssOht2MZFyLPg/wXeNxH77mzKOeDkXZVstHB+p/2xHKrYxERR
+YgdqynmHFqh364JWe54P6INTKsIr3aaZcW1yP+7QPkn4dlgfKz/XAHaDQXWyRgjiNR5FoO
+paKSOo7l1m+/GYAo1e1st6mnFrmbkk9K3g6EaOkTAgMBAAE=
+-----END RSA PUBLIC KEY-----
+-----BEGIN CERTIFICATE-----
+MIICHDCCAYUCEGwUqv3pnBBGhauSRfUeKa4wDQYJKoZIhvcNAQEFBQAwTzELMAkG
+A1UEBhMCICAxCjAIBgNVBAgTASAxCjAIBgNVBAcTASAxEDAOBgNVBAMTBzAuMC4w
+LjAxCjAIBgNVBAoTASAxCjAIBgNVBAsTASAwHhcNMTQwOTA4MTIyMDA1WhcNMTUw
+OTA4MTIyMDA1WjBPMQswCQYDVQQGEwIgIDEKMAgGA1UECBMBIDEKMAgGA1UEBxMB
+IDEQMA4GA1UEAxMHMC4wLjAuMDEKMAgGA1UEChMBIDEKMAgGA1UECxMBIDCBnzAN
+BgkqhkiG9w0BAQEFAAOBjQAwgYkCgYEAu6XdNrzAxr/Kyw6G3YxkXIs+D/Bd43Ef
+vubMo54ORdlWy0cH6n/bEcqtjERFFiB2rKeYcWqHfrglZ7ng/og1MqwivdpplxbX
+I/7tA+Sfh2WB8rP9cAdoNBdbJGCOI1HkWg6lopI6juXWb78ZgCjV7Wy3qacWuZuS
+T0reDoRo6RMCAwEAATANBgkqhkiG9w0BAQUFAAOBgQBoDCmYeawvQCuybvg/Isj4
+ewwn/OnbRxGBbqkmN7meaPPCZYKasqjpOseWtU3JcEMipv6vzDWiNXBmxhWsIagO
+Q3uFdW+BeN0LVyiJzHnaz3+tYvGgzgbVVjpyvn5KBtMGox/uPGjAyYco54anM6qz
+usAvY/xG7OpjYQ1qy0ccpg==
+-----END CERTIFICATE-----
+.

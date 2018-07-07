@@ -1,7 +1,7 @@
 
 var puppeteer = require('puppeteer');
 
-var headless = module.exports = function(address, user, pass, firmwarePath, callback) {
+var headless = module.exports = function(address, user, pass, options, callback) {
 	console.log(`Clicking around on ${address}`);
 
 	var that = this;
@@ -13,9 +13,13 @@ var headless = module.exports = function(address, user, pass, firmwarePath, call
 		await that.login(that.page, user, pass);
 		await that.launchMaintenacePage(that.page);
 		await that.launchFileManagement(that.page);
-		if (firmwarePath) {
+		if (options.firmwarePath) {
 			await that.launchFirmwarePage(that.page);
-			await that.uploadFirmware(that.page, firmwarePath);
+			await that.uploadFirmware(that.page, options.firmwarePath);
+		}
+		if (options.configPath) {
+			await that.launchConfigUploadPage(that.page);
+			await that.uploadConfiguration(that.page, options.configPath);	
 		}
 		callback && callback();
 	})
@@ -24,12 +28,20 @@ var headless = module.exports = function(address, user, pass, firmwarePath, call
 
 }
 
+var getiFrame = headless.prototype.getiFrame = async(page, iFrameName) => {
+	console.log(`Getting iframe named ${iFrameName}`);
+	//await page.waitForSelector(`#${iFrameName}`, {visible: true});
+	var frames  = page.frames().filter(frame => { console.log(frame.name()); return frame.name() == iFrameName});
+	console.log("Found " + frames.length + " frames"); // should always be 0
+	return frames[0];
+
+}
 
 headless.prototype.launchFirmwarePage = async(page) => {
-	var selector = 'tr[id="2070\~2160"] > td > a:last';
+	var selector = 'tr[id="2070~2160"] > td > a:last';
 
 	await page.evaluate(() => {
-		$('tr[id="2070~2160"] > td > a:last').click();
+		$(selector).click();
 		return Promise.resolve()
 	})
 	await waitUntilIdle(page);
@@ -44,7 +56,7 @@ headless.prototype.uploadFirmware = async(page, firmwarePath) => {
 
 	
 	var frames  = page.frames().filter(frame => { console.log(frame.name()); return frame.name() == "dlData"});
-	console.log("Found " + frames.length + "frames");
+	console.log("Found " + frames.length + " frames");
 	var popupFrame = frames[0];
 
 	var fileSelector = "#srcFileName";
@@ -57,7 +69,30 @@ headless.prototype.uploadFirmware = async(page, firmwarePath) => {
 	await clickOkOnDialog(page);
 }
 
-headless.prototype.uploadConfiguration = function() {
+
+headless.prototype.launchConfigUploadPage = async(page) => {
+	await page.evaluate(() => {
+		$('tr[id="2070~2180"] > td > a:last').click();
+		return Promise.resolve()
+	})
+	await waitUntilIdle(page);
+}
+
+headless.prototype.uploadConfiguration = async(page, path) => {
+	var frame = await getiFrame(page, "mainFrame");
+	var httpframe = await getiFrame(page, "httpData");
+
+	var uploadFileNameButtonSelector = "#srcFileName";
+	var applyButtonSelector = "#defaultButton"
+	await httpframe.waitForSelector(uploadFileNameButtonSelector, {visible: true});
+
+	var fileInput = await httpframe.$(uploadFileNameButtonSelector);
+	var applyButton = await frame.$(applyButtonSelector);
+
+	await fileInput.uploadFile(path);
+	await applyButton.click();
+	await clickOkOnDialog(page);
+	await waitUntilIdle(page);
 
 }
 
@@ -140,9 +175,10 @@ var clickOkOnDialog = async(page) => {
 	await page.waitForSelector(popupSelector, {visible: true});
 	await waitUntilIdle(page);
 
-	console.log("pop up");
-	var frames  = page.frames().filter(frame => { frame.name() == "popup_gw"});
-	var popupFrame = frames[0];
+	// console.log("pop up");
+	// var frames  = page.frames().filter(frame => { frame.name() == "popup_gw"});
+	// var popupFrame = frames[0];
+	popupFrame = await getiFrame(page, "popup_gw");
 
 	var okButtonSelector = "#btnOk";
 	await popupFrame.waitForSelector(okButtonSelector, {visible: true});
@@ -151,3 +187,7 @@ var clickOkOnDialog = async(page) => {
 	waitUntilIdle(page);
 	await ok.click();
 }
+
+
+//<% uplink_trunk_vlans.forEach((vlan) => { %>  <%= vlan %>
+//<% }) %>
