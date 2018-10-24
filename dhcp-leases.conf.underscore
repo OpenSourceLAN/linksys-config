@@ -1,0 +1,7 @@
+<%
+switches.forEach(function (dev) {
+%>
+host <%= dev['hostname'].replace(/-/g, "") %> {
+  fixed-address <%= dev['ip'] %>;
+  hardware ethernet <%= split_mac_address(dev['mac']) %>;
+}<% }) %>
