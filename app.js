@@ -66,6 +66,7 @@ function processInventoryItem(inv, callback) {
 
 	var baseAddressLocal= `http://${inv['ip']}/`;
 	var options = {
+		// UNCOMMENT THIS LINE TO RE-ENABLE CONFIG THINGS
 		configPath: confPath
 	}
 	var h = new headless(baseAddressLocal, username, password, options, function() {
@@ -74,8 +75,22 @@ function processInventoryItem(inv, callback) {
 	});
 }
 
+function generateDhcpReservations(inv, callback) {
+        leases = inv.filter(function(i) { return !!i['id'] && !!i['ip'] && !!i['mac']})
+        console.log(leases);
+	console.log("Generating DHCP static leases file");
+        var dhcpTempl = new theTemplater('dhcp-leases.conf.underscore', {});
+        var conf = dhcpTempl.getTemplateFor({"switches": inv});
+        fs.writeFileSync("dhcp-leases.conf", conf);
+}
+
+
 // Get list of all inventory items, and trigger processing on them
 inventory(config['google_spreadsheet_id'], (err, inventoryList) => {
+	if (err) {
+		console.log(err)
+	}
+        generateDhcpReservations(inventoryList);
 	const targets = getModelsToUpdateFromCommandLine(inventoryList);
 
 	async.parallelLimit(getListOfFunctionsToRun(targets), 10, (err, res) => {

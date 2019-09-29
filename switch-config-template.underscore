@@ -2,11 +2,11 @@ config-file-header
 <%= hostname %>
 v1.1.0.21
 CLI v1.0
-set system 
+set system
 @
 port jumbo-frame
 vlan database
-vlan 1,10-11,16-20 
+vlan 1,10-11,16-24
 exit
 voice vlan oui-table add 0001e3 Siemens_AG_phone________
 voice vlan oui-table add 00036b Cisco_phone_____________
@@ -17,50 +17,59 @@ voice vlan oui-table add 00d01e Pingtel_phone___________
 voice vlan oui-table add 00e075 Polycom/Veritel_phone___
 voice vlan oui-table add 00e0bb 3Com_phone______________
 hostname <%= hostname %>
-username admin password encrypted 263603574784294369c6b498bedfbba2a2de69f1 privilege 15 
+//username admin password encrypted 6788996e52ad807ef040c95d3deb23dcc40f8ebc privilege 15
 snmp-server server
 snmp-server location <%= location %>
-snmp-server community <%= snmppassword%> ro view Default 
+snmp-server community <%= snmppassword%> ro view Default
 clock timezone " " 0 minutes 0
 clock source sntp
 sntp unicast client enable
 sntp unicast client poll
-sntp server ntp.pax.lan poll 
+sntp server ntp.pax.lan poll
 ip name-server  10.10.0.1
 !
 !
 interface vlan 1
- ip address <%= ip %> 255.255.0.0 
- no ip address dhcp 
+ ip address <%= ip %> 255.255.0.0
+ no ip address dhcp
 !
 interface vlan 10
- name Internet 
+ name Internet
 !
 interface vlan 11
- name Servers 
+ name Servers
 !
-interface vlan 16
- name PCFP 
+interface vlan 12
+ name Servers
 !
-interface vlan 17
- name BYOC 
+interface vlan 13
+ name WiFI
 !
-interface vlan 18
- name Staff 
-!
-interface vlan 19
- name Wifi 
+interface vlan 14
+ name BYOCWifi
 !
 interface vlan 20
- name NothingVLAN 
+ name Byoc
 !
-<% 
+interface vlan 21
+ name pcfp
+!
+interface vlan 22
+ name VR
+!
+interface vlan 23
+ name CFP
+!
+interface vlan 24
+ name Royale
+!
+<%
 // Write out each port's configuration
-_.range(1,num_access_ports+1).forEach((portnum) => { %> 
+_.range(1,num_access_ports+1).forEach((portnum) => { %>
 interface gigabitethernet<%= portnum %>
- storm-control broadcast enable 
- storm-control broadcast level kbps 400000 
- storm-control include-multicast unknown-unicast 
+ storm-control broadcast enable
+ storm-control broadcast level kbps 400000
+ storm-control include-multicast unknown-unicast
  switchport mode access
  switchport access vlan <%= access_vlan %>
 !
@@ -72,19 +81,19 @@ var port_channel_link_type = (ten_gig_uplinks ? "ten" : "") + "gigabitethernet"
 
 // Calculate the trunk ports
 first_trunk = ten_gig_uplinks ? 1 : num_access_ports + 1;
-last_trunk = num_access_ports+num_trunk_ports;
+last_trunk = ten_gig_uplinks ? 2 : num_access_ports+num_trunk_ports;
 
 _.range(first_trunk, last_trunk+1).forEach((portnum) => {
 	%>
 interface <%= port_channel_link_type + portnum %>
- channel-group 1 mode auto 
+ channel-group 1 mode auto
 !
 <% }) %>
 interface Port-channel1
  switchport trunk allowed vlan add <%= uplink_trunk_vlans.join(",") %>
 !
 exit
-ip default-gateway 10.1.0.1 
+ip default-gateway 10.10.0.1
 crypto certificate 1 import
 -----BEGIN RSA PRIVATE KEY-----
 MIICXQIBAAKBgQD2SfCJtQizfadspIV9xvwhlGk/ybZG9A0ur5vuruL9/zTR4U+V2q+gYs

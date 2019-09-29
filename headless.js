@@ -13,6 +13,7 @@ var headless = module.exports = function(address, user, pass, options, callback)
 		await that.login(that.page, user, pass);
 		await that.launchMaintenacePage(that.page);
 		await that.launchFileManagement(that.page);
+
 		if (options.firmwarePath) {
 			await that.launchFirmwarePage(that.page);
 			await that.uploadFirmware(that.page, options.firmwarePath);
@@ -21,6 +22,8 @@ var headless = module.exports = function(address, user, pass, options, callback)
 			await that.launchConfigUploadPage(that.page);
 			await that.uploadConfiguration(that.page, options.configPath);	
 		}
+		await that.launchCopyFile(that.page);
+
 		callback && callback();
 	})
 	.catch(function(e) {console.log(e)});
@@ -96,11 +99,15 @@ headless.prototype.uploadConfiguration = async(page, path) => {
 
 }
 
+function sleep(ms) {
+	return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
 async function waitUntilIdle(page) {
-	await page.waitForNavigation({
-		waitUntil: "networkidle",
-		networkIdleTimeout: 1000
-	})
+	//await sleep (5000);
+	 await page.waitForNavigation({
+	 	waitUntil: "networkidle2",
+	 })
 }
 
 headless.prototype.launchBrowser = async () =>  {
@@ -110,7 +117,7 @@ headless.prototype.launchBrowser = async () =>  {
 headless.prototype.launchPage = async (browser, address) => {
 	console.log("Launching browser page", address);
 	var page = await browser.newPage();
-	await page.goto(address, {waitUntil: 'networkidle'})
+	await page.goto(address, {waitUntil: 'networkidle2'})
 	return page;
 }
 
@@ -152,6 +159,40 @@ headless.prototype.launchFileManagement = async(page) => {
 	// await waitUntilIdle(page);
 	console.log("done");
 }
+
+headless.prototype.launchCopyFile = async(page) => {
+	await waitUntilIdle(page);
+
+	// !!! I bet this ID changes between firmawre versions !!!
+	var linkId = "[id='2070~2200'] > td > table"
+	await page.waitForSelector(linkId)
+	var link = await page.$(linkId);
+	console.log("clickyclicky on file upload page");
+	await waitUntilIdle(page);
+
+	await link.click();
+	await waitUntilIdle(page);
+	// await link.click();
+	// await waitUntilIdle(page);
+	console.log("done");
+}
+
+// unused
+headless.prototype.clickCopyFIle = async(page) => {
+	var frame = await getiFrame(page, "mainFrame");
+//	var httpframe = await getiFrame(page, "httpData");
+
+	//var uploadFileNameButtonSelector = "#srcFileName";
+	var applyButtonSelector = "#defaultButton"
+	//await httpframe.waitForSelector(uploadFileNameButtonSelector, {visible: true});
+
+	//var fileInput = await httpframe.$(uploadFileNameButtonSelector);
+	var applyButton = await frame.$(applyButtonSelector);
+
+	//await fileInput.uploadFile(path);
+	await applyButton.click();
+	await clickOkOnDialog(page);
+	await waitUntilIdle(page);}
 
 // Click the logout link, and shutdown the browser instance
 headless.prototype.close = function(callback) {
