@@ -110,8 +110,12 @@ async function waitUntilIdle(page) {
 	 })
 }
 
+var browser = null
 headless.prototype.launchBrowser = async () =>  {
-	return await puppeteer.launch({headless: false});
+	if (browser == null) {
+		browser =puppeteer.launch({headless: false}); 
+	}
+	return await browser
 }
 
 headless.prototype.launchPage = async (browser, address) => {
