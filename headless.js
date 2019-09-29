@@ -1,15 +1,24 @@
 
 var puppeteer = require('puppeteer');
 
+const chromeArgs = [
+	'--disable-background-timer-throttling',
+	'--disable-backgrounding-occluded-windows',
+	'--disable-renderer-backgrounding',
+	'--enable-resource-load-scheduler=false'
+  ];
+
 var headless = module.exports = function(address, user, pass, options, callback) {
 	console.log(`Clicking around on ${address}`);
 
 	var that = this;
+	this.address = address
 
 	this.launchBrowser().then(async browser => {
 		that.browser = browser;
 
 		that.page = await that.launchPage(browser, address);
+		//await that.setPageActive(that.page)
 		await that.login(that.page, user, pass);
 		await that.launchMaintenacePage(that.page);
 		await that.launchFileManagement(that.page);
@@ -23,12 +32,17 @@ var headless = module.exports = function(address, user, pass, options, callback)
 			await that.uploadConfiguration(that.page, options.configPath);	
 		}
 		await that.launchCopyFile(that.page);
+		await that.clickCopyFile(that.page);
 
 		callback && callback();
 	})
 	.catch(function(e) {console.log(e)});
 
 
+}
+
+headless.prototype.log = function(message) {
+	console.log("Address: " + this.address + ", " + message)
 }
 
 var getiFrame = headless.prototype.getiFrame = async(page, iFrameName) => {
@@ -38,6 +52,15 @@ var getiFrame = headless.prototype.getiFrame = async(page, iFrameName) => {
 	console.log("Found " + frames.length + " frames"); // should always be 0
 	return frames[0];
 
+}
+
+// this method attempts to tell the page to be active, so that everything is "visible"
+// even when the page isn't focused. But it doesn't work. :(
+headless.prototype.setPageActive = async(page) => {
+	session = await page.target().createCDPSession()
+	await session.send('Page.enable');
+	await session.send('Page.setWebLifecycleState', {state: 'active'});
+	await session.detach()
 }
 
 headless.prototype.launchFirmwarePage = async(page) => {
@@ -105,22 +128,27 @@ function sleep(ms) {
 
 async function waitUntilIdle(page) {
 	//await sleep (5000);
+	// if it takes longer than 30 seconds for the network to chill then
+	// this throws an exception... ignore it
+	try {
 	 await page.waitForNavigation({
 	 	waitUntil: "networkidle2",
 	 })
+	} catch (e) {}
 }
 
 var browser = null
 headless.prototype.launchBrowser = async () =>  {
 	if (browser == null) {
-		browser =puppeteer.launch({headless: false}); 
+		browser =puppeteer.launch({headless: false, args: chromeArgs});
 	}
 	return await browser
 }
 
 headless.prototype.launchPage = async (browser, address) => {
 	console.log("Launching browser page", address);
-	var page = await browser.newPage();
+	ctx = await browser.createIncognitoBrowserContext();
+	var page = await ctx.newPage();
 	await page.goto(address, {waitUntil: 'networkidle2'})
 	return page;
 }
@@ -148,10 +176,13 @@ headless.prototype.launchMaintenacePage = async(page) => {
 }
 
 headless.prototype.launchFileManagement = async(page) => {
+	console.log("Entering file management")
+
 		await waitUntilIdle(page);
 
 	// !!! I bet this ID changes between firmawre versions !!!
-	var linkId = "[id='2070'] > td > table"
+	// Clicks on "Configuratin file copy" on the menu. Assumes we're already in the "Maintenance" tab
+	var linkId = "tr[id='2070'] > td > table"
 	await page.waitForSelector(linkId)
 	var link = await page.$(linkId);
 	console.log("clickyclicky on file upload page");
@@ -165,13 +196,14 @@ headless.prototype.launchFileManagement = async(page) => {
 }
 
 headless.prototype.launchCopyFile = async(page) => {
+	console.log("Entering copy file")
 	await waitUntilIdle(page);
 
 	// !!! I bet this ID changes between firmawre versions !!!
-	var linkId = "[id='2070~2200'] > td > table"
+	var linkId = "[id='2070~2200'] > td > a"
 	await page.waitForSelector(linkId)
 	var link = await page.$(linkId);
-	console.log("clickyclicky on file upload page");
+	console.log("clickyclicky on copy file page");
 	await waitUntilIdle(page);
 
 	await link.click();
@@ -181,8 +213,8 @@ headless.prototype.launchCopyFile = async(page) => {
 	console.log("done");
 }
 
-// unused
-headless.prototype.clickCopyFIle = async(page) => {
+// Final step in saving the file - click save!
+headless.prototype.clickCopyFile = async(page) => {
 	var frame = await getiFrame(page, "mainFrame");
 //	var httpframe = await getiFrame(page, "httpData");
 
@@ -196,7 +228,8 @@ headless.prototype.clickCopyFIle = async(page) => {
 	//await fileInput.uploadFile(path);
 	await applyButton.click();
 	await clickOkOnDialog(page);
-	await waitUntilIdle(page);}
+	await waitUntilIdle(page);
+}
 
 // Click the logout link, and shutdown the browser instance
 headless.prototype.close = function(callback) {
