@@ -2,5 +2,7 @@
 	"username": "admin",
 	"password": "admin",
 	"generated_config_directory": "./config/",
-	"google_spreadsheet_id": "the_id_of_your_google_spreadsheet_here"
+	"google_spreadsheet_id": "the_id_of_your_google_spreadsheet_here",
+	"tftp_filename": "A filename to use for the TFTP request. Kind of like a secret password I guess?",
+	"tftp_server_ip": "ip address of the host running this program so the switch's TFTP client can access this program"
 }

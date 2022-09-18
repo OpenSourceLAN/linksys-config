@@ -1,0 +1,68 @@
+config-file-header
+{{ .Hostname }}
+v1.1.0.21
+CLI v1.0
+set system
+@
+port jumbo-frame
+vlan database
+vlan {{ .VlanIdsComma }}
+exit
+voice vlan oui-table add 0001e3 Siemens_AG_phone________
+voice vlan oui-table add 00036b Cisco_phone_____________
+voice vlan oui-table add 00096e Avaya___________________
+voice vlan oui-table add 000fe2 H3C_Aolynk______________
+voice vlan oui-table add 0060b9 Philips_and_NEC_AG_phone
+voice vlan oui-table add 00d01e Pingtel_phone___________
+voice vlan oui-table add 00e075 Polycom/Veritel_phone___
+voice vlan oui-table add 00e0bb 3Com_phone______________
+hostname {{ .Hostname }}
+username admin password encrypted d033e22ae348aeb5660fc2140aec35850c4da997 privilege 15
+snmp-server server
+snmp-server location {{ .Location }}
+snmp-server community {{ .SnmpSecret }} ro view Default
+clock timezone " " 0 minutes 0
+clock source sntp
+sntp unicast client enable
+sntp unicast client poll
+sntp server ntp.pax.lan poll
+ip name-server  10.10.0.1
+!
+!
+{{ range .Vlans }}
+interface vlan {{ .Id }}
+{{ if (ne .Name "") }} name {{ .Name }}{{ end }}
+{{ if (ne .IpAddress "") -}}
+ ip address {{ .IpAddress }} 255.255.0.0
+{{ end -}}
+ no ip address dhcp
+!
+{{ end }}
+
+{{ range .Ports }}
+interface gigabitethernet{{ .PortNumber }}
+ storm-control broadcast enable
+ storm-control broadcast level kbps 400000
+ storm-control include-multicast unknown-unicast
+ switchport mode access
+ switchport access vlan {{ .VlanId }}
+
+{{ end }}
+
+{{ range .PortChannels }}
+{{ $portChannelId := .PortChannelId }}
+{{   range .GigEthPortMembers }}
+interface gigabitethernet{{ . }}
+ channel-group {{ $portChannelId }} mode auto
+{{   end }}
+{{   range .TenGigMembers }}
+interface tengigabitethernet{{ . }}
+ channel-group {{ $portChannelId }} mode auto
+{{   end }}
+interface Port-channel{{ $portChannelId }}
+ switchport trunk allowed vlan add {{ .AllowedVlans }}
+ switchport trunk native vlan {{ .NativeVlan }}
+{{ end }}
+exit
+
+ip default-gateway 10.10.0.1
